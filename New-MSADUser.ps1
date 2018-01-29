@@ -27,7 +27,7 @@ $date     = Get-Date
 
 #Define variable for a server with AD web services installed
 
-$ADServer = '70411SRV'
+$ADServer = 'DC-SM'
 
 
 #Get Admin accountb credential
@@ -40,7 +40,7 @@ Import-Module ActiveDirectory
 
 #Set the OU to add new users.
 
-$location = "OU=FromCSV,OU=TestUsers,DC=70411Lab,DC=com"
+$location = "OU=$Office,OU=Users,OU=MedSol.local,DC=MedicalSolutions,DC=local"
 
 
 #Import CSV file and update users in the OU with details in the fileh
@@ -55,22 +55,20 @@ ForEach-Object {
 
 $GivenName = $_.'FirstName'
 $Surname = $_.'LastName'
-$DisplayName = $_.'Display Name'
+$DisplayName = "$_.FirstName" + "$_.Lastname"
 $Username = $_.username
 $Title = $_.Title
 $Office = $_.location
-$Phone = $_.Phone
+$Phone = $_.Office
+$Mobile = $_.Mobile
 $Fax = '+18666885929'
 $Manager = $_.Manager
 $password = $_.Password
+$CopyUser = $_.CopyUser
 $ManagerDN = (Get-ADUser -server $ADServer -Credential $GetAdminact -LDAPFilter "(DisplayName=$Manager)").DistinguishedName #Manager required in DN format
 
 
-#change country to to be landcodes in order for AD to accept them format, 
-#For example,United Kingdom is GB
-If ($Country -eq "United Kingdom") {$Country = "GB"} 
-
-#Define samAccountName to use with NewADUser in the format firstName.LastName
+#Define samAccountName to use with NewADUser in the format firstName + last initials as needed
 
 $sam = $Username
 

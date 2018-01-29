@@ -64,6 +64,7 @@ function Get-MSNewHire {
 
         [Parameter(Mandatory = $True,
             ValueFromPipelineByPropertyName = $True)]
+        [ValidateSet ("Denver", "Omaha", "Cincinnati", "Tupelo")]
         [string]
         $Location, 
 
@@ -73,7 +74,7 @@ function Get-MSNewHire {
         [string]
         $Title,
 
-        [Parameter(Mandatory = $false,
+        [Parameter(Mandatory = $True,
             ValueFromPipelineByPropertyName = $True)]
         [string]
         $OfficePhone,
@@ -101,8 +102,8 @@ function Get-MSNewHire {
                 'Manager' = $_.manager
                 'Location' = $_.location
                 'Title' = $_.title
-                'OfficePhone' = $_.office
-                'MobilePhone' = $_.mobile
+                'OfficePhone' = $_.officephone
+                'MobilePhone' = $_.mobilephone
                 'CopyUser' = $_.copyuser
                 'Username' = $username
             }#End of Parameters
