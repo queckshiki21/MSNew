@@ -1,20 +1,22 @@
-﻿###########################################################
-# AUTHOR  : Victor Ashiedu 
-# WEBSITE : iTechguides.com
-# BLOG    : iTechguides.com/blog-2/
-# DATE    : 25-09-2014
-# COMMENT : This  Powershell script creates Active Directory users from a csv file
-#           User names are created in the format FirstName.LastName. Script also populates manager, 
-#           UPN, email address, and other user properties then sets Password must change at next logon.
-###########################################################
+﻿<#
+.SYNOPSIS
+Use the information from the Get-MSNewHire command to create a new Active Directory User
 
-#Define location of my script variable
-#the -parent switch returns one directory lower from directory defined. 
-#below will return up to ImportADUsers folder 
-#and since my files are located here it will find it.
-#It failes withpout appending "*.*" at the end
-#This file is required to update fields for existing users
-#Modify this script to create new users in UnifiedGov domain
+.DESCRIPTION
+Take a list of new hires and create Active directory users from them. The users will then
+be moved to the correct OU based on their office location. Finally they will have group memberships
+copied over from an existing user
+
+.EXAMPLE
+import-csv 'C:\Users\FakeUser\desktop\New Hires.csv' | Get-MSNewHire | New-MSADUsers
+
+.EXAMPLE
+New-MSADusers -GivenName Timmy -Surname Balmer -Username Timmys -Title....
+
+.NOTES
+General notes
+#>
+
 
 
 
@@ -40,30 +42,78 @@ Import-Module ActiveDirectory
 
 #Set the OU to add new users.
 
-$location = "OU=$Office,OU=Users,OU=MedSol.local,DC=MedicalSolutions,DC=local"
+$location = "OU=$location,OU=Users,OU=MedSol.local,DC=MedicalSolutions,DC=local"
 
 
 #Import CSV file and update users in the OU with details in the fileh
 #Create the function script to update the users
 
-Function Create-ADUsers {
+Function New-MSADUsers {
+  [CmdletBinding()]
+  Param(
+      # Parameter help description
+      [Parameter(Mandatory = $True,
+          ValueFromPipelineByPropertyName = $True)]
+      [string]
+      $FirstName,
+
+      [Parameter(Mandatory = $True,
+          ValueFromPipelineByPropertyName = $True)]
+      [string]
+      $LastName,
+
+      [Parameter(Mandatory = $True,
+          ValueFromPipelineByPropertyName = $True)]
+      [string]
+      $Manager,
+
+      [Parameter(Mandatory = $True,
+          ValueFromPipelineByPropertyName = $True)]
+      [ValidateSet ("Denver", "Omaha", "Cincinnati", "Tupelo","San Diego")]
+      [string]
+      $Location, 
+
+
+      [Parameter(Mandatory = $True,
+          ValueFromPipelineByPropertyName = $True)]
+      [string]
+      $Title,
+
+      [Parameter(Mandatory = $True,
+          ValueFromPipelineByPropertyName = $True)]
+          [ValidateLength(0,10)]
+      [string]
+      $locationPhone,
+
+      [Parameter(Mandatory = $false,
+          ValueFromPipelineByPropertyName = $True)]
+          [ValidateLength(0,10)]
+      [string]
+      $MobilePhone,
+
+      [Parameter(Mandatory = $false,
+          ValueFromPipelineByPropertyName = $True)]
+      [string]
+      $CopyUser
+  )
 
 "AD user creation logs for( " + $date + "): " | Out-File $logfile -append
 "--------------------------------------------" | Out-File $logfile -append
 
 ForEach-Object { 
 
-$GivenName = $_.'FirstName'
-$Surname = $_.'LastName'
+$FirstName = $_.'FirstName'
+$LastName = $_.'LastName'
 $DisplayName = "$_.FirstName" + "$_.Lastname"
 $Username = $_.username
 $Title = $_.Title
-$Office = $_.location
-$Phone = $_.Office
-$Mobile = $_.Mobile
-$Fax = '+18666885929'
+$location = $_.location
+$OfficePhone = $_.OfficePhone
+$MobilePhone = $_.MobilePhone
+$Fax1 = '+18666885929'
+$Fax = '866.688.5929'
 $Manager = $_.Manager
-$password = $_.Password
+$password = 'MedicalSolutions123!'
 $CopyUser = $_.CopyUser
 $ManagerDN = (Get-ADUser -server $ADServer -Credential $GetAdminact -LDAPFilter "(DisplayName=$Manager)").DistinguishedName #Manager required in DN format
 
@@ -82,7 +132,8 @@ $Domain = '@medicalsolutions.com'
 $UPN = $sam + $Domain
 
 #Now create new users using info from CSV
-#First check whether the user exist, if use is not in ad, create it
+#First check whether the user exist, if use is not in ad, create it (This is a 
+#double check in case there are multiple users that end up with the same username)
 
 Try   { $nameinAD = Get-ADUser -server $ADServer -Credential $GetAdminact -LDAPFilter "(sAMAccountName=$sam)" }
     Catch { }
@@ -95,19 +146,19 @@ Try   { $nameinAD = Get-ADUser -server $ADServer -Credential $GetAdminact -LDAPF
 #If "-enabled $TRUE" is not set, the account will be disabled by default
 
 $setpassword = ConvertTo-SecureString -AsPlainText $password -force
+
       New-ADUser $sam -server $ADServer -Credential $GetAdminact `
-      -GivenName $GivenName -ChangePasswordAtLogon $TRUE `
-      -Surname $Surname -DisplayName $DisplayName -Office $Office `
-      -Description $Description -EmailAddress $Mail `
-      -StreetAddress $StreetAddress -City $City -state $State  `
-      -PostalCode $PostCode -Country $Country -UserPrincipalName $UPN `
-      -Company $Company -Department $Department -enabled $TRUE `
-      -Title $Title -OfficePhone $Phone -AccountPassword $setpassword
+      -GivenName $FirstName -ChangePasswordAtLogon $FALSE `
+      -Surname $LastName -DisplayName $DisplayName -Office $location `
+      -UserPrincipalName $UPN -enabled $TRUE `
+      -Title $Title -OfficePhone "+1$OfficePhone" -MobilePhone "+1$MobilePhone" -Fax $Fax1 -AccountPassword $setpassword
 
  #Set manager property#necessary as manager may not exist while the users are being created
  #with New-ADUser command above. Manager switch only accepts name in DN format
 
- Set-ADUser -server $ADServer -Credential $GetAdminact -Identity $sam -Manager $ManagerDN
+ $OfficePhone = '{0}.{1}.{2}' -f $OfficePhone.Substring(0,3),$OfficePhone.Substring(3,3),$OfficePhone.Substring(6,4)
+ $MobilePhone = '{0}-{1}-{2}' -f $MobilePhone.Substring(0,3),$MobilePhone.Substring(3,3),$MobilePhone.Substring(6,4)
+ Set-ADUser -server $ADServer -Credential $GetAdminact -Identity $sam -Manager $ManagerDN -Add @{extensionAttribute6="$OfficePhone"} -Add @{extensionAttribute7="$MobilePhone"} -Add @{extensionAttribut8="$fax"}
 
  #Define DN to use in the  Move-ADObject command
 
@@ -137,5 +188,4 @@ Else
     }
     }
 # Run the function script 
-Create-ADUsers
 #Finish
